@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use hyper::{Method, StatusCode};
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
-
+use hyper::body::Frame;
 use hyper::body::Bytes;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
@@ -18,6 +18,23 @@ async fn echo(
         ))),
         (&Method::POST, "/echo") => {
             Ok(Response::new(req.into_body().boxed()))
+        },
+        (&Method::POST, "/echo/uppercase") => {
+            // Map this body's frame to a different type
+            let frame_stream = req.into_body().map_frame(|frame| {
+                let frame = if let Ok(data) = frame.into_data() {
+                    // Convert every byte in every Data frame to uppercase
+                    data.iter()
+                        .map(|byte| byte.to_ascii_uppercase())
+                        .collect::<Bytes>()
+                } else {
+                    Bytes::new()
+                };
+        
+                Frame::data(frame)
+            });
+        
+            Ok(Response::new(frame_stream.boxed()))
         },
 
         // Return 404 Not Found for other routes.
