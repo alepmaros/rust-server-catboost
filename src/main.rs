@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use hyper::{Method, StatusCode};
+use hyper::{body::Body, Method, StatusCode};
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
 use hyper::body::Frame;
 use hyper::body::Bytes;
@@ -35,6 +35,27 @@ async fn echo(
             });
         
             Ok(Response::new(frame_stream.boxed()))
+        },
+        // To reverse we must collect all string before reversing it
+        (&Method::POST, "/echo/reversed") => {
+            // Protect our server from massive bodies.
+            let upper = req.body().size_hint().upper().unwrap_or(u64::MAX);
+            if upper > 1024 * 64 {
+                let mut resp = Response::new(full("Body too big"));
+                *resp.status_mut() = hyper::StatusCode::PAYLOAD_TOO_LARGE;
+                return Ok(resp);
+            }
+
+            // Await the whole body to be collected into a single `Bytes`...
+            let whole_body = req.collect().await?.to_bytes();
+
+            // Iterate the whole body in reverse order and collect into a new Vec.
+            let reversed_body = whole_body.iter()
+                .rev()
+                .cloned()
+                .collect::<Vec<u8>>();
+
+            Ok(Response::new(full(reversed_body)))
         },
 
         // Return 404 Not Found for other routes.
