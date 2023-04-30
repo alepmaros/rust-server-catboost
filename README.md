@@ -1,15 +1,14 @@
 # rust-server-catboost
-Basic rust server that runs a predict on a catboost model
-
-# TODO
-
-- [ ] Create simple server that accepts json
-- [ ] Dockerize application
-- [ ] Train simple catboost model
-- [ ] Load it and run predict on server
+Basic rust server that runs a predict on a catboost model based on the Iris dataset
 
 # curl
 
 ```
-curl -X POST -H "Content-Type: application/json" -d '{"key1":"value1", "key2":"value2"}' http://localhost:8080
+curl -X POST   http://localhost:8080/invocations -H 'Content-Type: application/json' -d '{
+    "f1": 5.1,
+    "f2": 3.5,
+    "f3": 1.4,
+    "f4": 0.2
+}'
 ```
+
