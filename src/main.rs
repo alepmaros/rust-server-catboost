@@ -8,6 +8,13 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Request, Response};
 use tokio::net::TcpListener;
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ModelRequest {
+    feature1: f32,
+    feature2: f32,
+}
 
 async fn echo(
     req: Request<hyper::body::Incoming>,
@@ -18,6 +25,12 @@ async fn echo(
         ))),
         (&Method::POST, "/echo") => {
             Ok(Response::new(req.into_body().boxed()))
+        },
+        (&Method::POST, "/echo/json") => {
+            let body = req.collect().await?.to_bytes();
+            let input: ModelRequest = serde_json::from_slice(&body).unwrap();
+            println!("{:?}", input);
+            Ok(Response::new(full(body)))
         },
         (&Method::POST, "/echo/uppercase") => {
             // Map this body's frame to a different type
