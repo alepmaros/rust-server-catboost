@@ -1,8 +1,7 @@
 use std::net::SocketAddr;
 
-use hyper::{body::Body, Method, StatusCode};
+use hyper::{Method, StatusCode};
 use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
-use hyper::body::Frame;
 use hyper::body::Bytes;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
@@ -11,9 +10,15 @@ use tokio::net::TcpListener;
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug)]
-struct ModelRequest {
+struct ModelInput {
     feature1: f32,
     feature2: f32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ModelOutput {
+    class: u8,
+    proba: f32
 }
 
 async fn echo(
@@ -26,50 +31,16 @@ async fn echo(
         (&Method::POST, "/echo") => {
             Ok(Response::new(req.into_body().boxed()))
         },
-        (&Method::POST, "/echo/json") => {
+        (&Method::POST, "/invocations") => {
             let body = req.collect().await?.to_bytes();
-            let input: ModelRequest = serde_json::from_slice(&body).unwrap();
+            let input: ModelInput = serde_json::from_slice(&body).unwrap();
             println!("{:?}", input);
-            Ok(Response::new(full(body)))
-        },
-        (&Method::POST, "/echo/uppercase") => {
-            // Map this body's frame to a different type
-            let frame_stream = req.into_body().map_frame(|frame| {
-                let frame = if let Ok(data) = frame.into_data() {
-                    // Convert every byte in every Data frame to uppercase
-                    data.iter()
-                        .map(|byte| byte.to_ascii_uppercase())
-                        .collect::<Bytes>()
-                } else {
-                    Bytes::new()
-                };
-        
-                Frame::data(frame)
-            });
-        
-            Ok(Response::new(frame_stream.boxed()))
-        },
-        // To reverse we must collect all string before reversing it
-        (&Method::POST, "/echo/reversed") => {
-            // Protect our server from massive bodies.
-            let upper = req.body().size_hint().upper().unwrap_or(u64::MAX);
-            if upper > 1024 * 64 {
-                let mut resp = Response::new(full("Body too big"));
-                *resp.status_mut() = hyper::StatusCode::PAYLOAD_TOO_LARGE;
-                return Ok(resp);
-            }
 
-            // Await the whole body to be collected into a single `Bytes`...
-            let whole_body = req.collect().await?.to_bytes();
+            let output: ModelOutput = ModelOutput{class: 0, proba: 0.0};
+            let output_str = serde_json::to_string(&output).unwrap();
 
-            // Iterate the whole body in reverse order and collect into a new Vec.
-            let reversed_body = whole_body.iter()
-                .rev()
-                .cloned()
-                .collect::<Vec<u8>>();
-
-            Ok(Response::new(full(reversed_body)))
-        },
+            Ok(Response::new(full(output_str)))
+        }
 
         // Return 404 Not Found for other routes.
         _ => {
@@ -85,6 +56,7 @@ fn empty() -> BoxBody<Bytes, hyper::Error> {
         .map_err(|never| match never {})
         .boxed()
 }
+
 fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
     Full::new(chunk.into())
         .map_err(|never| match never {})
